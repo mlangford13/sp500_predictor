@@ -29,11 +29,14 @@ denorm <- function(x, min, max) {
 gold_prices <- Quandl("WGC/GOLD_DAILY_USD", date.gte="1990-01-01", date.lte=today)
 View(gold_prices)
 
+treasury_yield <- Quandl("USTREASURY/YIELD", date.gte="1990-01-01", date.lte=today)
+View(treasury_yield)
+
 exxon <- getStockData("XOM")
 View(exxon)
 
 apple <- getStockData("AAPL")
-google <- getStockData("GOOG")
+jpm <- getStockData("JPM")
 
 sp_data = read.csv("GSPC.csv")
 sp_data[,1] <- as.Date(sp_data[,1])
@@ -46,10 +49,11 @@ for (d in as.list(dates)) {
    gold_ind <- which(gold_prices[,1] == d, arr.ind=TRUE)
    exxon_ind <- which(exxon[,2] == d, arr.ind=TRUE)
    apple_ind <- which(apple[,2] == d, arr.ind=TRUE)
-   google_ind <- which(google[,2] == d, arr.ind=TRUE)
+   jpm_ind <- which(jpm[,2] == d, arr.ind=TRUE)
    sp_ind <- which(sp_data[,1] == d, arr.ind=TRUE)
+   treasury_ind <- which(treasury_yield[,1] == d, arr.ind=TRUE)
    
-   if (length(gold_ind) > 0 && length(exxon_ind) > 0 && length(apple_ind) > 0 && length(google_ind) > 0 && length(sp_ind) > 0) {
+   if (length(gold_ind) > 0 && length(exxon_ind) > 0 && length(apple_ind) > 0 && length(google_ind) > 0 && length(sp_ind) > 0 && length(treasury_ind)) {
      joined_data<-rbind(joined_data,
                         data.frame(
                           Date=as.Date(d),
@@ -57,6 +61,7 @@ for (d in as.list(dates)) {
                           XOM=exxon[exxon_ind, 3],
                           AAPL=apple[apple_ind, 3],
                           GOOG=google[google_ind, 3],
+                          TEN_YEAR=treasury_yield[treasury_ind, 10],
                           SP=sp_data[sp_ind, 5]))
    }
 }
@@ -70,10 +75,10 @@ test <- normalized[ind,]
 training <- normalized[-ind,]
 View(normalized)
 
-nn<-neuralnet(SP~Gold_Close+XOM+AAPL+GOOG, data=training, hidden=c(10))
+nn<-neuralnet(SP~Gold_Close+XOM+AAPL+GOOG+TEN_YEAR, data=training, hidden=c(10))
 plot(nn)
 
-results <- compute(nn, test[,-5])$net.result
+results <- compute(nn, test[,-6])$net.result
 denorm_results <- denorm(results, min, max)
 
-View(cbind(joined_data[-ind, 6], denorm_results))
+View(cbind(joined_data[-ind, 7], denorm_results))
