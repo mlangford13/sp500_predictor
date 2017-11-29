@@ -1,10 +1,17 @@
+#  Course           : CS 513
+#  Team Member 1    : Bryan Gardner (10369193)
+#  Team Member 2    : Michael Langford (10387693)
+#  Purpose          : Predict trends and values in the S&P 500 using data mining techniques
+
 #install.packages("neuralnet")
 #install.packages("Quandl")
 
 rm(list=ls())
+set.seed(3982)
 
 library(Quandl)
 library(neuralnet)
+library(randomForest)
 
 start_date <- as.Date("2010-01-01")
 today <- Sys.Date()
@@ -94,27 +101,60 @@ View(joined_data)
 
 min <- min(joined_data$NEXT_SP)
 max <- max(joined_data$NEXT_SP)
-
-normalized<-as.data.frame(lapply(joined_data[,!names(joined_data) %in% c("Date")], mmnorm))
+normalized<-cbind(Date=joined_data[,1], as.data.frame(lapply(joined_data[,!names(joined_data) %in% c("Date")], mmnorm)))
 View(normalized)
 
 ind <- seq(from=1, to=nrow(normalized), by=5)
-test <- normalized[ind,]
-training <- normalized[-ind,]
-View(normalized)
 
-View(training)
-nn<-neuralnet(NEXT_SP~Gold_Close+XOM+GE+JPM+TEN_YEAR+ONE_YEAR+THREE_YEAR+OIL+SP_CLOSE, data=training, hidden=c(5,5))
+norm_test <- normalized[ind, !names(normalized) %in% c("Date", "NEXT_SP")]
+norm_training <- normalized[-ind, !names(joined_data) %in% c("Date")]
+head(norm_test)
+View(norm_test)
+head(norm_training)
+
+actual_test<-joined_data[ind, !names(joined_data) %in% c("Date", "NEXT_SP")]
+actual_training<-joined_data[-ind, !names(joined_data) %in% c("Date")]
+head(actual_test)
+head(actual_training)
+
+View(norm_training)
+View(actual_training)
+
+head(norm_training)
+nn<-neuralnet(NEXT_SP~Gold_Close+XOM+GE+JPM+TEN_YEAR+ONE_YEAR+THREE_YEAR+OIL+SP_CLOSE, data=norm_training, hidden=c(5,5))
 plot(nn)
 
-head(test)
-results <- compute(nn, test[,!names(test) %in% c("NEXT_SP")])$net.result
-denorm_results <- denorm(results, min, max)
+head(norm_test)
+nn_pred <- compute(nn, norm_test)$net.result
+nn_denorm_results <- denorm(nn_pred, min, max)
 
-pred <- cbind(joined_data[ind,], PREDICTED_NEXT_SP=denorm_results)
-View(pred)
+nn_results <- cbind(joined_data[ind,], PREDICTED_NEXT_SP=nn_denorm_results)
+View(nn_results)
 
-correct_moves <- sum((pred$SP_CLOSE < pred$NEXT_SP & pred$SP_CLOSE < pred$PREDICTED_NEXT_SP) | 
-      (pred$SP_CLOSE > pred$NEXT_SP & pred$SP_CLOSE > pred$PREDICTED_NEXT_SP))
+correct_moves <- sum((nn_results$SP_CLOSE < nn_results$NEXT_SP & nn_results$SP_CLOSE < nn_results$PREDICTED_NEXT_SP) | 
+      (nn_results$SP_CLOSE > nn_results$NEXT_SP & nn_results$SP_CLOSE > nn_results$PREDICTED_NEXT_SP))
 
-correct_moves/nrow(pred)
+correct_moves/nrow(nn_results)
+
+sum(abs(nn_results$NEXT_SP - nn_results$PREDICTED_NEXT_SP))/nrow(nn_results)
+
+
+
+head(actual_training)
+
+rf<-randomForest(NEXT_SP~Gold_Close+TEN_YEAR+ONE_YEAR+THREE_YEAR+OIL+SP_CLOSE+XOM+JPM+GE, data=actual_training, importance=TRUE, na.action=na.omit)
+
+plot(rf)
+varImpPlot(rf)
+importance(rf)
+
+head(actual_test)
+rf_pred <- predict(rf,actual_test)
+
+rf_results <- cbind(joined_data[ind,], PREDICTED_NEXT_SP=rf_pred)
+View(rf_results)
+rf_correct_moves <- sum((rf_results$SP_CLOSE < rf_results$NEXT_SP & rf_results$SP_CLOSE < rf_results$PREDICTED_NEXT_SP) | 
+                          (rf_results$SP_CLOSE > rf_results$NEXT_SP & rf_results$SP_CLOSE > rf_results$PREDICTED_NEXT_SP))
+
+rf_correct_moves/nrow(rf_results)
+sum(abs(rf_results$NEXT_SP - rf_results$PREDICTED_NEXT_SP))/nrow(rf_results)
